@@ -1,99 +1,101 @@
 ; reveOS-ipl
 ; TAB=4
 
-CYLS	EQU		10				; CYLS掕??10
+CYLS	EQU		10				; CYLS定义为10，读入10个柱面
 
-		ORG		0x7c00			; ??嬫撪懚憰?抧毈
+		ORG		0x7c00			; 程序装载地址
 
-; 懚?FAT12帴?怣懅
+; FAT12信息
 
 		JMP		entry
 		DB		0x90			
-		DB		"reve-ipl"		; ??嬫柤徧
-		DW		512				; ?槩愵嬫512帤?
-		DB		1				; ?槩馄戝彫?1槩愵嬫
-		DW		1				; FAT婲巒埵抲樃戞1槩愵嬫?巒
-		DB		2				; 2槩FAT
-		DW		224				; 帴?崻栚??224?
-		DW		2880			; 帴?桳2880槩愵嬫
-		DB		0xf0			; 帴????0xf0
-		DW		9				; FAT?9愵嬫?
-		DW		18				; 1帴摴(拰柺)18槩愵嬫
-		DW		2				; 2槩帴?
-		DD		0				; 晄巊梡暘嬫
-		DD		2880			; 廳幨帴?戝彫
+		DB		"reve-ipl"		; 启动区名称
+		DW		512				; 扇区大小
+		DB		1				; 簇大小(一个扇区)
+		DW		1				; FAT起始位置(第一个扇区)
+		DB		2				; FAT个数为2
+		DW		224				; 根目录224个
+		DW		2880			; 磁盘大小2880
+		DB		0xf0			; 磁盘种类为0xf0
+		DW		9				; FAT长度为9个扇区
+		DW		18				; 1个磁道有18个扇区
+		DW		2				; 磁头数为2
+		DD		0				; 不适用分区
+		DD		2880			; 重写一次磁盘大小
 		DB		0,0,0x29		; 
-		DD		0xffffffff		; 櫳?
-		DB		"reveOS     "	; 帴?柤乮11帤?乯
-		DB		"FAT12   "		; 帴?奿幃柤乮8帤?乯
-		RESB	18				; 嬻弌18帤?
+		DD		0xffffffff		; 卷标
+		DB		"reveOS     "	; 磁盘名称
+		DB		"FAT12   "		; 磁盘格式名称
+		RESB	18				; 空出18个字节
 
 		entry:
-		MOV		AX,0			; 婑懚婍揑弶巒壔
+		MOV		AX,0			; 初始化寄存器
 		MOV		SS,AX
 		MOV		SP,0x7c00
 		MOV		DS,AX
 
-		MOV		AX,0x0820		; ?擖帄撪懚埵抲丆10拰柺?檛嬫
+		MOV		AX,0x0820		; 读到内存的0x08200
 		MOV		ES,AX
-		MOV		CH,0			; 拰柺0
-		MOV		DH,0			; 帴?0
-		MOV		CL,2			; 愵嬫2
+		MOV		CH,0			; 柱面0
+		MOV		DH,0			; 磁头0
+		MOV		CL,2			; 扇区2
 readloop:
-		MOV		SI,0			; 婑懚婍SI?懚??幐?揑師悢
+		MOV		SI,0			; SI记录读盘失败次数 读五次
 retry:
-		MOV		AH,0x02			; BIOS?擖帴?
-		MOV		AL,1			; ?1槩愵嬫
+		MOV		AH,0x02			; BIOS读入磁盘
+		MOV		AL,1			; 读1个扇区
 		MOV		BX,0
-		MOV		DL,0x00			; ??婍A
-		INT		0x13			; ?梡帴?BIOS
-		JNC		next			; 杤桳弌?摓next
+		MOV		DL,0x00			; A驱动器
+		INT		0x13			; BIOS读入磁盘
+		JNC		next			;
 		ADD		SI,1			; 
 		CMP		SI,5			; 
-		JAE		error			; SI >= 5 挼?摓error
+		JAE		error			; SI >= 5 跳转至error
 		MOV		AH,0x00
 		MOV		DL,0x00			; 
-		INT		0x13			; 弌?岪廳抲??婍
+		INT		0x13			; 重置驱动器
 		JMP		retry
 next:
 		MOV		AX,ES			
 		ADD		AX,0x0020
-		MOV		ES,AX			; ?擖抧毈鷿壛512帤?(0X200)丆拲堄崯??ES:BX撪懚抧毈昞帵曽幃丅晄擻?ES捈愙ADD
-		ADD		CL,1			; 壓堦槩愵嬫
+		MOV		ES,AX			; 内存地址后移512(0x200)。此处为ES:BX内存表示
+		ADD		CL,1			; 
 		CMP		CL,18			; 
-		JBE		readloop		; CL <= 18 挼?帄readloop
+		JBE		readloop		; CL <= 18 跳转readloop
 		MOV		CL,1
-		ADD		DH,1			; 帴?1
+		ADD		DH,1			; 磁头1
 		CMP		DH,2
-		JB		readloop		; DH < 2 挼?帄readloop
+		JB		readloop		; DH < 2 跳转readloop
 		MOV		DH,0
 		ADD		CH,1
 		CMP		CH,CYLS
-		JB		readloop		; CH < CYLS 挼?帄readloop
+		JB		readloop		; CH < CYLS 跳转readloop
 
-; 埲忋?擖FAT12??10槩拰柺帄撪懚丆樃抧毈0x08200?巒丆184320帤?
-
+; 从软盘读入184320字节，到内存0x08200
+		MOV		[0x0ff0],CH		;将磁盘装载内容的结束地址存入内存	
+		JMP		0xc200					
 fin:
-		HLT						; CPU掆巭
-		JMP		fin				; 澷?弞?
+		HLT						; CPU停止
+		JMP		fin				; 无限循环
 
 error:
 		MOV		SI,msg
-putloop:						; BIOS?帵帤晞
+putloop:						; BIOS显示
 		MOV		AL,[SI]
-		ADD		SI,1			; 堦槩堦槩?帵帤晞
+		ADD		SI,1			; 每次显示一个文字
 		CMP		AL,0
 		JE		fin
-		MOV		AH,0x0e			; BIOS?帵帤晞
+		MOV		AH,0x0e			; 
 		MOV		BX,15			; 
-		INT		0x10			; ?梡BIOS
+		INT		0x10			; 调用显卡BIOS
 		JMP		putloop
 msg:
-		DB		0x0a, 0x0a		; ?槩?峴晞
+		DB		0x0a, 0x0a		; 两个换行符
 		DB		"load error"
-		DB		0x0a			; ?峴晞
+		DB		0x0a			; 换行符
 		DB		0
 
-		RESB	0x7dfe-$		; 樃崯?堦捈摓0x7dfe揢擖0
+		RESB	0x7dfe-$		; 从此处直到0x7dfe填0
 
-		DB		0x55, 0xaa		;??嬫?懇?巙
+		DB		0x55, 0xaa		; 启动区结束
+
